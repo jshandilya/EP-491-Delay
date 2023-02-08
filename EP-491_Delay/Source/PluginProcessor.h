@@ -10,6 +10,8 @@
 
 #include <JuceHeader.h>
 
+#define MAX_DELAY_TIME 2
+
 //==============================================================================
 /**
 */
@@ -55,8 +57,36 @@ public:
     //==============================================================================
     void getStateInformation (juce::MemoryBlock& destData) override;
     void setStateInformation (const void* data, int sizeInBytes) override;
+    
+    float lin_interp(float sample_x, float sample_x1, float inPhase);
+    
+    juce::AudioProcessorValueTreeState apvts;
 
 private:
+    
+    float mDelayTimeSmoothed;
+    
+    juce::AudioParameterFloat* mDryWetParameter;
+    juce::AudioParameterFloat* mFeedbackParameter;
+    juce::AudioParameterFloat* mDelayTimeParameter;
+    
+    float mDryWet;
+    
+    float mFeedbackLeft;
+    float mFeedbackRight;
+    
+    float mDelayTimeInSamples;
+    float mDelayReadHead;
+    
+    int mCircularBufferLength;
+    
+    int mCircularBufferWriteHead;
+    
+    float* mCircularBufferLeft;
+    float* mCircularBufferRight;
+    
+    juce::AudioProcessorValueTreeState::ParameterLayout createParams();
+    
     //==============================================================================
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (EP491_DelayAudioProcessor)
 };

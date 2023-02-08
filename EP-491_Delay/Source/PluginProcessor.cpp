@@ -22,10 +22,36 @@ EP491_DelayAudioProcessor::EP491_DelayAudioProcessor()
                        )
 #endif
 {
+    addParameter(mDryWetParameter = new juce::AudioParameterFloat("drywet", "Dry Wet", 0.0, 1.0, 0.5));
+    
+    addParameter(mFeedbackParameter = new juce::AudioParameterFloat("feedback", "Feedback", 0, 0.98, 0.5));
+    
+    addParameter(mDelayTimeParameter = new juce::AudioParameterFloat("delaytime","Delay Time", 0.01, MAX_DELAY_TIME, 0.5));
+    
+    mDelayTimeSmoothed = 0;
+    mCircularBufferLeft = nullptr;
+    mCircularBufferRight = nullptr;
+    mCircularBufferWriteHead = 0;
+    mCircularBufferLength = 0;
+    mDelayTimeInSamples = 0;
+    mDelayReadHead = 0;
+    mFeedbackLeft = 0;
+    mFeedbackRight = 0;
+    mDryWet = 0.5f;
 }
 
 EP491_DelayAudioProcessor::~EP491_DelayAudioProcessor()
 {
+    if (mCircularBufferLeft != nullptr) {
+        delete [] mCircularBufferLeft;
+        mCircularBufferLeft = nullptr;
+
+    }
+    
+    if (mCircularBufferRight != nullptr) {
+        delete [] mCircularBufferRight;
+        mCircularBufferRight = nullptr;
+    }
 }
 
 //==============================================================================
@@ -93,8 +119,35 @@ void EP491_DelayAudioProcessor::changeProgramName (int index, const juce::String
 //==============================================================================
 void EP491_DelayAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
-    // Use this method as the place to do any pre-playback
-    // initialisation that you need..
+    mDelayTimeInSamples = sampleRate * *mDelayTimeParameter;
+    
+    mCircularBufferLength = sampleRate * MAX_DELAY_TIME;
+    
+    if (mCircularBufferLeft != nullptr) {
+        delete [] mCircularBufferLeft;
+        mCircularBufferLeft = nullptr;
+    }
+
+    if (mCircularBufferLeft == nullptr) {
+        mCircularBufferLeft = new float[(int)(mCircularBufferLength)];
+    }
+
+    juce::zeromem(mCircularBufferLeft, mCircularBufferLength * sizeof(float));
+
+    if (mCircularBufferRight != nullptr) {
+        delete [] mCircularBufferRight;
+        mCircularBufferRight = nullptr;
+    }
+
+    if (mCircularBufferRight == nullptr) {
+        mCircularBufferRight = new float[(int)(mCircularBufferLength)];
+    }
+
+    juce::zeromem(mCircularBufferLeft, mCircularBufferLength * sizeof(float));
+    
+    mCircularBufferWriteHead = 0;
+
+    mDelayTimeSmoothed = *mDelayTimeParameter;
 }
 
 void EP491_DelayAudioProcessor::releaseResources()
@@ -135,26 +188,51 @@ void EP491_DelayAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, 
     auto totalNumInputChannels  = getTotalNumInputChannels();
     auto totalNumOutputChannels = getTotalNumOutputChannels();
 
-    // In case we have more outputs than inputs, this code clears any output
-    // channels that didn't contain input data, (because these aren't
-    // guaranteed to be empty - they may contain garbage).
-    // This is here to avoid people getting screaming feedback
-    // when they first compile a plugin, but obviously you don't need to keep
-    // this code if your algorithm always overwrites all the output channels.
     for (auto i = totalNumInputChannels; i < totalNumOutputChannels; ++i)
         buffer.clear (i, 0, buffer.getNumSamples());
-
-    // This is the place where you'd normally do the guts of your plugin's
-    // audio processing...
-    // Make sure to reset the state if your inner loop is processing
-    // the samples and the outer loop is handling the channels.
-    // Alternatively, you can process the samples with the channels
-    // interleaved by keeping the same state.
-    for (int channel = 0; channel < totalNumInputChannels; ++channel)
+    
+    mDelayTimeInSamples = getSampleRate() * *mDelayTimeParameter;
+    
+    float* leftChannel = buffer.getWritePointer(0);
+    float* rightChannel = buffer.getWritePointer(1);
+    
+    for (int i = 0; i < buffer.getNumSamples(); i++)
     {
-        auto* channelData = buffer.getWritePointer (channel);
+        
+        mDelayTimeSmoothed = mDelayTimeSmoothed - 0.001 * (mDelayTimeSmoothed - *mDelayTimeParameter);
+        mDelayTimeInSamples = getSampleRate() * mDelayTimeSmoothed;
+        
+        mCircularBufferLeft[mCircularBufferWriteHead] = leftChannel[i] + mFeedbackLeft;
+        mCircularBufferRight[mCircularBufferWriteHead] = rightChannel[i] + mFeedbackRight;
+        
+        mDelayReadHead = mCircularBufferWriteHead - mDelayTimeInSamples;
+        
+        if (mDelayReadHead < 0) {
+            mDelayReadHead += mCircularBufferLength;
+        }
+        
+        int readHead_x = (int)mDelayReadHead;
+        int readHead_x1 = readHead_x + 1;
+        float readHeadFloat = mDelayReadHead - readHead_x;
 
-        // ..do something to the data...
+        if (readHead_x1 >= mCircularBufferLength) {
+            readHead_x1 -= mCircularBufferLength;
+        }
+        
+        float delay_sample_left = lin_interp(mCircularBufferLeft[readHead_x], mCircularBufferLeft[readHead_x1], readHeadFloat);
+        float delay_sample_right = lin_interp(mCircularBufferRight[readHead_x], mCircularBufferRight[readHead_x1], readHeadFloat);
+        
+        mFeedbackLeft = delay_sample_left * *mFeedbackParameter;
+        mFeedbackRight = delay_sample_right * *mFeedbackParameter;
+        
+        mCircularBufferWriteHead++;
+        
+        buffer.setSample(0, i, buffer.getSample(0, i) * (1 - *mDryWetParameter) + delay_sample_left * *mDryWetParameter);
+        buffer.setSample(1, i, buffer.getSample(1, i) * (1 - *mDryWetParameter) + delay_sample_right * *mDryWetParameter);
+
+        if (mCircularBufferWriteHead >= mCircularBufferLength) {
+            mCircularBufferWriteHead = 0;
+        }
     }
 }
 
@@ -188,4 +266,24 @@ void EP491_DelayAudioProcessor::setStateInformation (const void* data, int sizeI
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
 {
     return new EP491_DelayAudioProcessor();
+}
+
+float EP491_DelayAudioProcessor::lin_interp(float sample_x, float sample_x1, float inPhase)
+{
+    return (1 - inPhase) * sample_x + inPhase * sample_x1;
+}
+
+juce::AudioProcessorValueTreeState::ParameterLayout EP491_DelayAudioProcessor::createParams()
+{
+    std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
+    
+//    params.push_back(std::make_unique<juce::AudioParameterInt>(juce::ParameterID { "VOICES", 1 }, "Voices", 1, 8, 8));
+
+    params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "DRYWET", 1 }, "Dry Wet", 0.0f, 1.0f, 0.5f));
+    
+    params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "FEEDBACK", 1 }, "Feedback", 0.0f, 0.98f, 0.5f));
+    
+    params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "TIME", 1 }, "Time", 0.01f, MAX_DELAY_TIME, 0.5f));
+    
+    return { params.begin(), params.end() };
 }
