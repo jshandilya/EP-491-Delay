@@ -245,11 +245,11 @@ void EP491_DelayAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, 
         mCircularBufferWriteHead++;
         
 //        buffer.setSample(0, i, buffer.getSample(0, i) * (1 - *mDryWetParameter) + delay_sample_left * *mDryWetParameter);
-        buffer.setSample(0, i, buffer.getSample(0, i) * (1 - *mDryWetParameter) + delay_sample_left * delayDryWet);
+        buffer.setSample(0, i, buffer.getSample(0, i) * (1 - delayDryWet) + delay_sample_left * delayDryWet);
 
         
 //        buffer.setSample(1, i, buffer.getSample(1, i) * (1 - *mDryWetParameter) + delay_sample_right * *mDryWetParameter);
-        buffer.setSample(1, i, buffer.getSample(1, i) * (1 - *mDryWetParameter) + delay_sample_right * delayDryWet);
+        buffer.setSample(1, i, buffer.getSample(1, i) * (1 - delayDryWet) + delay_sample_right * delayDryWet);
         
         if (mCircularBufferWriteHead >= mCircularBufferLength) {
             mCircularBufferWriteHead = 0;
