@@ -66,10 +66,6 @@ private:
     
     float mDelayTimeSmoothed;
     
-    juce::AudioParameterFloat* mDryWetParameter;
-    juce::AudioParameterFloat* mFeedbackParameter;
-    juce::AudioParameterFloat* mDelayTimeParameter;
-    
     float mDryWet;
     
     float mFeedbackLeft;

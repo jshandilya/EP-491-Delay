@@ -22,21 +22,15 @@ EP491_DelayAudioProcessor::EP491_DelayAudioProcessor()
                        ), apvts(*this, nullptr, "Parameters", createParams())
 #endif
 {
-//    addParameter(mDryWetParameter = new juce::AudioParameterFloat("drywet", "Dry Wet", 0.0, 1.0, 0.5));
-//
-//    addParameter(mFeedbackParameter = new juce::AudioParameterFloat("feedback", "Feedback", 0, 0.98, 0.5));
-//
-//    addParameter(mDelayTimeParameter = new juce::AudioParameterFloat("delaytime","Delay Time", 0.01, MAX_DELAY_TIME, 0.5));
-    
-    mDelayTimeSmoothed = 0;
+    mDelayTimeSmoothed = 0.f;
     mCircularBufferLeft = nullptr;
     mCircularBufferRight = nullptr;
     mCircularBufferWriteHead = 0;
     mCircularBufferLength = 0;
-    mDelayTimeInSamples = 0;
-    mDelayReadHead = 0;
-    mFeedbackLeft = 0;
-    mFeedbackRight = 0;
+    mDelayTimeInSamples = 0.f;
+    mDelayReadHead = 0.f;
+    mFeedbackLeft = 0.f;
+    mFeedbackRight = 0.f;
     mDryWet = 0.5f;
 }
 
@@ -45,7 +39,6 @@ EP491_DelayAudioProcessor::~EP491_DelayAudioProcessor()
     if (mCircularBufferLeft != nullptr) {
         delete [] mCircularBufferLeft;
         mCircularBufferLeft = nullptr;
-
     }
     
     if (mCircularBufferRight != nullptr) {
@@ -121,9 +114,7 @@ void EP491_DelayAudioProcessor::prepareToPlay (double sampleRate, int samplesPer
 {
     auto& delayTime = *apvts.getRawParameterValue("TIME");
     
-//    mDelayTimeInSamples = sampleRate * *mDelayTimeParameter;
     mDelayTimeInSamples = sampleRate * delayTime;
-
     
     mCircularBufferLength = sampleRate * MAX_DELAY_TIME;
     
@@ -199,7 +190,6 @@ void EP491_DelayAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, 
     auto& delayFeedback = *apvts.getRawParameterValue("FEEDBACK");
     auto& delayDryWet = *apvts.getRawParameterValue("DRYWET");
     
-//    mDelayTimeInSamples = getSampleRate() * *mDelayTimeParameter;
     mDelayTimeInSamples = getSampleRate() * delayTime;
 
     
@@ -208,8 +198,6 @@ void EP491_DelayAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, 
     
     for (int i = 0; i < buffer.getNumSamples(); i++)
     {
-        
-//        mDelayTimeSmoothed = mDelayTimeSmoothed - 0.001 * (mDelayTimeSmoothed - *mDelayTimeParameter);
         mDelayTimeSmoothed = mDelayTimeSmoothed - 0.001 * (mDelayTimeSmoothed - delayTime);
 
         mDelayTimeInSamples = getSampleRate() * mDelayTimeSmoothed;
@@ -234,21 +222,12 @@ void EP491_DelayAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, 
         float delay_sample_left = lin_interp(mCircularBufferLeft[readHead_x], mCircularBufferLeft[readHead_x1], readHeadFloat);
         float delay_sample_right = lin_interp(mCircularBufferRight[readHead_x], mCircularBufferRight[readHead_x1], readHeadFloat);
         
-//        mFeedbackLeft = delay_sample_left * *mFeedbackParameter;
         mFeedbackLeft = delay_sample_left * delayFeedback;
-        
-//        mFeedbackRight = delay_sample_right * *mFeedbackParameter;
         mFeedbackRight = delay_sample_right * delayFeedback;
-
-        
         
         mCircularBufferWriteHead++;
         
-//        buffer.setSample(0, i, buffer.getSample(0, i) * (1 - *mDryWetParameter) + delay_sample_left * *mDryWetParameter);
         buffer.setSample(0, i, buffer.getSample(0, i) * (1 - delayDryWet) + delay_sample_left * delayDryWet);
-
-        
-//        buffer.setSample(1, i, buffer.getSample(1, i) * (1 - *mDryWetParameter) + delay_sample_right * *mDryWetParameter);
         buffer.setSample(1, i, buffer.getSample(1, i) * (1 - delayDryWet) + delay_sample_right * delayDryWet);
         
         if (mCircularBufferWriteHead >= mCircularBufferLength) {
@@ -271,15 +250,18 @@ juce::AudioProcessorEditor* EP491_DelayAudioProcessor::createEditor()
 //==============================================================================
 void EP491_DelayAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
 {
-    // You should use this method to store your parameters in the memory block.
-    // You could do that either as raw data, or use the XML or ValueTree classes
-    // as intermediaries to make it easy to save and load complex data.
+    auto state = apvts.copyState();
+    std::unique_ptr<juce::XmlElement> xml (state.createXml());
+    copyXmlToBinary (*xml, destData);
 }
 
 void EP491_DelayAudioProcessor::setStateInformation (const void* data, int sizeInBytes)
 {
-    // You should use this method to restore your parameters from this memory block,
-    // whose contents will have been created by the getStateInformation() call.
+    std::unique_ptr<juce::XmlElement> xmlState (getXmlFromBinary (data, sizeInBytes));
+    
+    if (xmlState.get() != nullptr)
+        if (xmlState->hasTagName (apvts.state.getType()))
+            apvts.replaceState (juce::ValueTree::fromXml (*xmlState));
 }
 
 //==============================================================================
@@ -298,8 +280,6 @@ juce::AudioProcessorValueTreeState::ParameterLayout EP491_DelayAudioProcessor::c
 {
     std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
     
-//    params.push_back(std::make_unique<juce::AudioParameterInt>(juce::ParameterID { "VOICES", 1 }, "Voices", 1, 8, 8));
-
     params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "TIME", 1 }, "Time", 0.01f, MAX_DELAY_TIME, 0.5f));
     
     params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "FEEDBACK", 1 }, "Feedback", 0.0f, 0.98f, 0.5f));
