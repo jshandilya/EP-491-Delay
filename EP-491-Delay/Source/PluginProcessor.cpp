@@ -19,32 +19,35 @@ EP491_DelayAudioProcessor::EP491_DelayAudioProcessor()
                       #endif
                        .withOutput ("Output", juce::AudioChannelSet::stereo(), true)
                      #endif
-                       ), apvts(*this, nullptr, "Parameters", createParams())
+                       ), apvts (*this, nullptr, "Parameters", createParams())
 #endif
 {
-    mDelayTimeSmoothed = 0.f;
-    mCircularBufferLeft = nullptr;
-    mCircularBufferRight = nullptr;
-    mCircularBufferWriteHead = 0;
-    mCircularBufferLength = 0;
-    mDelayTimeInSamples = 0.f;
-    mDelayReadHead = 0.f;
-    mFeedbackLeft = 0.f;
-    mFeedbackRight = 0.f;
-    mDryWet = 0.5f;
+//    mDelayTimeSmoothed = 0.f;
+//    mCircularBufferLeft = nullptr;
+//    mCircularBufferRight = nullptr;
+//    mCircularBufferWriteHead = 0;
+//    mCircularBufferLength = 0;
+//    mDelayTimeInSamples = 0.f;
+//    mDelayReadHead = 0.f;
+//    mFeedbackLeft = 0.f;
+//    mFeedbackRight = 0.f;
+//    mDryWet = 0.5f;
 }
 
 EP491_DelayAudioProcessor::~EP491_DelayAudioProcessor()
 {
-    if (mCircularBufferLeft != nullptr) {
-        delete [] mCircularBufferLeft;
-        mCircularBufferLeft = nullptr;
-    }
+//    if (mCircularBufferLeft != nullptr) {
+//        delete [] mCircularBufferLeft;
+//        mCircularBufferLeft = nullptr;
+//    }
+//
+//    if (mCircularBufferRight != nullptr) {
+//        delete [] mCircularBufferRight;
+//        mCircularBufferRight = nullptr;
+//    }
     
-    if (mCircularBufferRight != nullptr) {
-        delete [] mCircularBufferRight;
-        mCircularBufferRight = nullptr;
-    }
+//    delayBuffer.clear();
+    
 }
 
 //==============================================================================
@@ -112,37 +115,14 @@ void EP491_DelayAudioProcessor::changeProgramName (int index, const juce::String
 //==============================================================================
 void EP491_DelayAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
-    auto& delayTime = *apvts.getRawParameterValue("TIME");
+    auto delayBufferSize = sampleRate * 2.0;
+    delayBuffer.setSize (getTotalNumOutputChannels(), (int)delayBufferSize);
     
-    mDelayTimeInSamples = sampleRate * delayTime;
-    
-    mCircularBufferLength = sampleRate * MAX_DELAY_TIME;
-    
-    if (mCircularBufferLeft != nullptr) {
-        delete [] mCircularBufferLeft;
-        mCircularBufferLeft = nullptr;
+    for (int ch = 0; ch < getTotalNumOutputChannels(); ++ch)
+    {
+        delayInMillis[ch].reset (sampleRate, 0.05f);
+        feedback[ch].reset (sampleRate, 0.05f);
     }
-
-    if (mCircularBufferLeft == nullptr) {
-        mCircularBufferLeft = new float[(int)(mCircularBufferLength)];
-    }
-
-    juce::zeromem(mCircularBufferLeft, mCircularBufferLength * sizeof(float));
-
-    if (mCircularBufferRight != nullptr) {
-        delete [] mCircularBufferRight;
-        mCircularBufferRight = nullptr;
-    }
-
-    if (mCircularBufferRight == nullptr) {
-        mCircularBufferRight = new float[(int)(mCircularBufferLength)];
-    }
-
-    juce::zeromem(mCircularBufferLeft, mCircularBufferLength * sizeof(float));
-    
-    mCircularBufferWriteHead = 0;
-
-    mDelayTimeSmoothed = delayTime;
 }
 
 void EP491_DelayAudioProcessor::releaseResources()
@@ -186,55 +166,139 @@ void EP491_DelayAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, 
     for (auto i = totalNumInputChannels; i < totalNumOutputChannels; ++i)
         buffer.clear (i, 0, buffer.getNumSamples());
     
-    auto& delayTime = *apvts.getRawParameterValue("TIME");
-    auto& delayFeedback = *apvts.getRawParameterValue("FEEDBACK");
-    auto& delayDryWet = *apvts.getRawParameterValue("DRYWET");
-    
-    mDelayTimeInSamples = getSampleRate() * delayTime;
-
-    
-    float* leftChannel = buffer.getWritePointer(0);
-    float* rightChannel = buffer.getWritePointer(1);
-    
-    for (int i = 0; i < buffer.getNumSamples(); i++)
+    for (int channel = 0; channel < totalNumInputChannels; ++channel)
     {
-        mDelayTimeSmoothed = mDelayTimeSmoothed - 0.001 * (mDelayTimeSmoothed - delayTime);
+        fillBuffer (buffer, channel);
+        readFromBuffer (buffer, delayBuffer, channel);
+        feedbackBuffer (buffer, channel);
+    }
+    
+    updateBufferPositions (buffer, delayBuffer);
+}
 
-        mDelayTimeInSamples = getSampleRate() * mDelayTimeSmoothed;
+void EP491_DelayAudioProcessor::fillBuffer (juce::AudioBuffer<float>& buffer, int channel)
+{
+    auto bufferSize = buffer.getNumSamples();
+    auto delayBufferSize = delayBuffer.getNumSamples();
+    auto* wet = apvts.getRawParameterValue ("DRYWET");
+    
+    buffer.applyGain (0, bufferSize, 1.0f - (wet->load() / 100.0f));
+    
+    // Check to see if main buffer copies to delay buffer without needing to wrap...
+    if (delayBufferSize >= bufferSize + writePosition)
+    {
+        // copy main buffer contents to delay buffer
+        delayBuffer.copyFrom (channel, writePosition, buffer.getWritePointer (channel), bufferSize);
+    }
+    // if no
+    else
+    {
+        // Determine how much space is left at the end of the delay buffer
+        auto numSamplesToEnd = delayBufferSize - writePosition;
         
-        mCircularBufferLeft[mCircularBufferWriteHead] = leftChannel[i] + mFeedbackLeft;
-        mCircularBufferRight[mCircularBufferWriteHead] = rightChannel[i] + mFeedbackRight;
+        // Copy that amount of contents to the end...
+        delayBuffer.copyFrom (channel, writePosition, buffer.getWritePointer (channel), numSamplesToEnd);
         
-        mDelayReadHead = mCircularBufferWriteHead - mDelayTimeInSamples;
+        // Calculate how much contents is remaining to copy
+        auto numSamplesAtStart = bufferSize - numSamplesToEnd;
         
-        if (mDelayReadHead < 0) {
-            mDelayReadHead += mCircularBufferLength;
-        }
-        
-        int readHead_x = (int)mDelayReadHead;
-        int readHead_x1 = readHead_x + 1;
-        float readHeadFloat = mDelayReadHead - readHead_x;
-
-        if (readHead_x1 >= mCircularBufferLength) {
-            readHead_x1 -= mCircularBufferLength;
-        }
-        
-        float delay_sample_left = lin_interp(mCircularBufferLeft[readHead_x], mCircularBufferLeft[readHead_x1], readHeadFloat);
-        float delay_sample_right = lin_interp(mCircularBufferRight[readHead_x], mCircularBufferRight[readHead_x1], readHeadFloat);
-        
-        mFeedbackLeft = delay_sample_left * delayFeedback;
-        mFeedbackRight = delay_sample_right * delayFeedback;
-        
-        mCircularBufferWriteHead++;
-        
-        buffer.setSample(0, i, buffer.getSample(0, i) * (1 - delayDryWet) + delay_sample_left * delayDryWet);
-        buffer.setSample(1, i, buffer.getSample(1, i) * (1 - delayDryWet) + delay_sample_right * delayDryWet);
-        
-        if (mCircularBufferWriteHead >= mCircularBufferLength) {
-            mCircularBufferWriteHead = 0;
-        }
+        // Copy remaining amount to beginning of delay buffer
+        delayBuffer.copyFrom (channel, 0, buffer.getWritePointer (channel, numSamplesToEnd), numSamplesAtStart);
     }
 }
+
+void EP491_DelayAudioProcessor::feedbackBuffer (juce::AudioBuffer<float>& buffer, int channel)
+{
+    auto bufferSize = buffer.getNumSamples();
+    auto delayBufferSize = delayBuffer.getNumSamples();
+    // feedback
+    auto fbLeft = apvts.getRawParameterValue ("FEEDBACKLEFT")->load();
+    auto fbRight = apvts.getRawParameterValue ("FEEDBACKRIGHT")->load();
+    
+    if (apvts.getRawParameterValue ("FBLINK")->load() == true)
+    {
+        fbRight = fbLeft;
+    }
+    
+    auto fb = channel == 0 ? fbLeft : fbRight;
+    
+    // Check to see if main buffer copies to delay buffer without needing to wrap...
+    if (delayBufferSize >= bufferSize + writePosition)
+    {
+        // copy main buffer contents to delay buffer
+        delayBuffer.addFromWithRamp (channel, writePosition, buffer.getWritePointer (channel), bufferSize, fb, fb);
+    }
+    // if no
+    else
+    {
+        // Determine how much space is left at the end of the delay buffer
+        auto numSamplesToEnd = delayBufferSize - writePosition;
+        
+        // Copy that amount of contents to the end...
+        delayBuffer.addFromWithRamp (channel, writePosition, buffer.getWritePointer (channel), numSamplesToEnd, fb, fb);
+        
+        // Calculate how much contents is remaining to copy
+        auto numSamplesAtStart = bufferSize - numSamplesToEnd;
+        
+        // Copy remaining amount to beginning of delay buffer
+        delayBuffer.addFromWithRamp (channel, 0, buffer.getWritePointer (channel, numSamplesToEnd), numSamplesAtStart, fb, fb);
+    }
+}
+
+void EP491_DelayAudioProcessor::readFromBuffer (juce::AudioBuffer<float>& buffer, juce::AudioBuffer<float>& delayBuffer, int channel)
+{
+    auto bufferSize = buffer.getNumSamples();
+    auto delayBufferSize = delayBuffer.getNumSamples();
+    
+    auto percent = apvts.getRawParameterValue ("DRYWET")->load();
+    
+    auto g = juce::jmap (percent, 0.0f, 100.0f, 0.0f, 1.0f);
+        
+    auto dryGain = 5.0f - g;
+    
+//    auto dryGain = 1.0f - g;
+    
+    auto delayTimeLeft = apvts.getRawParameterValue ("DELAYMSLEFT")->load();
+    auto delayTimeRight = apvts.getRawParameterValue ("DELAYMSRIGHT")->load();
+    
+    if (apvts.getRawParameterValue ("DELAYLINK")->load() == true)
+    {
+        delayTimeRight = delayTimeLeft;
+    }
+    
+    auto delayTime = channel == 0 ? delayTimeLeft : delayTimeRight;
+    
+    // delayMs
+    auto readPosition = std::round (writePosition - (getSampleRate() * delayTime / 1000.0f));
+    
+    if (readPosition < 0)
+        readPosition += delayBufferSize;
+    
+    buffer.applyGainRamp (0, bufferSize, dryGain, dryGain);
+    
+    if (readPosition + bufferSize < delayBufferSize)
+    {
+        buffer.addFromWithRamp (channel, 0, delayBuffer.getReadPointer (channel, readPosition), bufferSize, g, g);
+    }
+    else
+    {
+        auto numSamplesToEnd = delayBufferSize - readPosition;
+        buffer.addFromWithRamp (channel, 0, delayBuffer.getReadPointer (channel, readPosition), numSamplesToEnd, g, g);
+        
+        auto numSamplesAtStart = bufferSize - numSamplesToEnd;
+        buffer.addFromWithRamp (channel, numSamplesToEnd, delayBuffer.getReadPointer (channel, 0), numSamplesAtStart, g, g);
+    }
+}
+
+void EP491_DelayAudioProcessor::updateBufferPositions (juce::AudioBuffer<float>& buffer, juce::AudioBuffer<float>& delayBuffer)
+{
+    auto bufferSize = buffer.getNumSamples();
+    auto delayBufferSize = delayBuffer.getNumSamples();
+    
+    writePosition += bufferSize;
+    writePosition %= delayBufferSize;
+}
+
 
 //==============================================================================
 bool EP491_DelayAudioProcessor::hasEditor() const
@@ -280,11 +344,17 @@ juce::AudioProcessorValueTreeState::ParameterLayout EP491_DelayAudioProcessor::c
 {
     std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
     
-    params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "TIME", 1 }, "Time", 0.01f, MAX_DELAY_TIME, 0.5f));
+    params.push_back (std::make_unique<juce::AudioParameterFloat>("DELAYMSLEFT", "Delay Ms Left", 0.0f, 2000.0f, 500.0f));
+    params.push_back (std::make_unique<juce::AudioParameterFloat>("DELAYMSRIGHT", "Delay Ms Right", 0.0f, 2000.0f, 350.0f));
     
-    params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "FEEDBACK", 1 }, "Feedback", 0.0f, 0.98f, 0.5f));
+    params.push_back (std::make_unique<juce::AudioParameterBool>("DELAYLINK", "Delay Link", false));
+
+    params.push_back (std::make_unique<juce::AudioParameterFloat>("FEEDBACKLEFT", "Feedback Left", 0.0f, 1.0f, 0.8f));
+    params.push_back (std::make_unique<juce::AudioParameterFloat>("FEEDBACKRIGHT", "Feedback Right", 0.0f, 1.0f, 0.8f));
     
-    params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "DRYWET", 1 }, "Dry Wet", 0.0f, 1.0f, 0.5f));
+    params.push_back (std::make_unique<juce::AudioParameterBool>("FBLINK", "Feedback Link", true));
+    
+    params.push_back (std::make_unique<juce::AudioParameterFloat>("DRYWET", "Dry/Wet", 0.0f, 100.0f, 60.0f));
     
     return { params.begin(), params.end() };
 }

@@ -63,6 +63,17 @@ public:
     juce::AudioProcessorValueTreeState apvts;
 
 private:
+    void fillBuffer (juce::AudioBuffer<float>& buffer, int channel);
+    void feedbackBuffer (juce::AudioBuffer<float>& buffer, int channel);
+    void readFromBuffer (juce::AudioBuffer<float>& buffer, juce::AudioBuffer<float>& delayBuffer, int channel);
+    void updateBufferPositions (juce::AudioBuffer<float>& buffer, juce::AudioBuffer<float>& delayBuffer);
+    
+    juce::AudioProcessorValueTreeState::ParameterLayout createParams();
+    
+    juce::AudioBuffer<float> delayBuffer;
+    juce::LinearSmoothedValue<float> delayInMillis[2] { 0.0f };
+    juce::LinearSmoothedValue<float> feedback[2] { 0.0f };
+    int writePosition { 0 };
     
     float mDelayTimeSmoothed;
     
@@ -80,9 +91,6 @@ private:
     
     float* mCircularBufferLeft;
     float* mCircularBufferRight;
-    
-    juce::AudioProcessorValueTreeState::ParameterLayout createParams();
-    
     //==============================================================================
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (EP491_DelayAudioProcessor)
 };
