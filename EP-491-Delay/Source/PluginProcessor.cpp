@@ -32,6 +32,11 @@ EP491_DelayAudioProcessor::EP491_DelayAudioProcessor()
 //    mFeedbackLeft = 0.f;
 //    mFeedbackRight = 0.f;
 //    mDryWet = 0.5f;
+    
+    if (delayBuffer.hasBeenCleared() == false)
+    {
+        delayBuffer.clear();
+    }
 }
 
 EP491_DelayAudioProcessor::~EP491_DelayAudioProcessor()
@@ -46,8 +51,7 @@ EP491_DelayAudioProcessor::~EP491_DelayAudioProcessor()
 //        mCircularBufferRight = nullptr;
 //    }
     
-//    delayBuffer.clear();
-    
+    delayBuffer.clear();
 }
 
 //==============================================================================
@@ -253,10 +257,12 @@ void EP491_DelayAudioProcessor::readFromBuffer (juce::AudioBuffer<float>& buffer
     auto percent = apvts.getRawParameterValue ("DRYWET")->load();
     
     auto g = juce::jmap (percent, 0.0f, 100.0f, 0.0f, 1.0f);
-        
-    auto dryGain = 5.0f - g;
     
-//    auto dryGain = 1.0f - g;
+//    auto g = 0.5f;
+    
+    g += 0.5;
+        
+//    auto dryGain = 5.0f - g;
     
     auto delayTimeLeft = apvts.getRawParameterValue ("DELAYMSLEFT")->load();
     auto delayTimeRight = apvts.getRawParameterValue ("DELAYMSRIGHT")->load();
@@ -274,7 +280,7 @@ void EP491_DelayAudioProcessor::readFromBuffer (juce::AudioBuffer<float>& buffer
     if (readPosition < 0)
         readPosition += delayBufferSize;
     
-    buffer.applyGainRamp (0, bufferSize, dryGain, dryGain);
+//    buffer.applyGainRamp (0, bufferSize, dryGain, dryGain);
     
     if (readPosition + bufferSize < delayBufferSize)
     {
@@ -349,8 +355,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout EP491_DelayAudioProcessor::c
     
     params.push_back (std::make_unique<juce::AudioParameterBool>("DELAYLINK", "Delay Link", false));
 
-    params.push_back (std::make_unique<juce::AudioParameterFloat>("FEEDBACKLEFT", "Feedback Left", 0.0f, 1.0f, 0.8f));
-    params.push_back (std::make_unique<juce::AudioParameterFloat>("FEEDBACKRIGHT", "Feedback Right", 0.0f, 1.0f, 0.8f));
+    params.push_back (std::make_unique<juce::AudioParameterFloat>("FEEDBACKLEFT", "Feedback Left", 0.0f, 0.9f, 0.8f));
+    params.push_back (std::make_unique<juce::AudioParameterFloat>("FEEDBACKRIGHT", "Feedback Right", 0.0f, 0.9f, 0.8f));
     
     params.push_back (std::make_unique<juce::AudioParameterBool>("FBLINK", "Feedback Link", true));
     
