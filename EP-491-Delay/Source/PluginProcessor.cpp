@@ -215,16 +215,10 @@ void EP491_DelayAudioProcessor::feedbackBuffer (juce::AudioBuffer<float>& buffer
 {
     auto bufferSize = buffer.getNumSamples();
     auto delayBufferSize = delayBuffer.getNumSamples();
+    
     // feedback
-    auto fbLeft = apvts.getRawParameterValue ("FEEDBACKLEFT")->load();
-    auto fbRight = apvts.getRawParameterValue ("FEEDBACKRIGHT")->load();
     
-    if (apvts.getRawParameterValue ("FBLINK")->load() == true)
-    {
-        fbRight = fbLeft;
-    }
-    
-    auto fb = channel == 0 ? fbLeft : fbRight;
+    auto fb = apvts.getRawParameterValue ("FEEDBACK")->load();
     
     // Check to see if main buffer copies to delay buffer without needing to wrap...
     if (delayBufferSize >= bufferSize + writePosition)
@@ -354,11 +348,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout EP491_DelayAudioProcessor::c
     params.push_back (std::make_unique<juce::AudioParameterFloat>("DELAYMSRIGHT", "Delay Ms Right", 0.0f, 2000.0f, 350.0f));
     
     params.push_back (std::make_unique<juce::AudioParameterBool>("DELAYLINK", "Delay Link", false));
-
-    params.push_back (std::make_unique<juce::AudioParameterFloat>("FEEDBACKLEFT", "Feedback Left", 0.0f, 0.9f, 0.8f));
-    params.push_back (std::make_unique<juce::AudioParameterFloat>("FEEDBACKRIGHT", "Feedback Right", 0.0f, 0.9f, 0.8f));
     
-    params.push_back (std::make_unique<juce::AudioParameterBool>("FBLINK", "Feedback Link", true));
+    params.push_back (std::make_unique<juce::AudioParameterFloat>("FEEDBACK", "Feedback", 0.0f, 0.9f, 0.8f));
     
     params.push_back (std::make_unique<juce::AudioParameterFloat>("DRYWET", "Dry/Wet", 0.0f, 100.0f, 60.0f));
     
