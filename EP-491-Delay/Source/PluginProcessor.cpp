@@ -127,6 +127,15 @@ void EP491_DelayAudioProcessor::prepareToPlay (double sampleRate, int samplesPer
         delayInMillis[ch].reset (sampleRate, 0.05f);
         feedback[ch].reset (sampleRate, 0.05f);
     }
+    
+    juce::dsp::ProcessSpec spec;
+    spec.maximumBlockSize = samplesPerBlock;
+    spec.sampleRate = sampleRate;
+    spec.numChannels = getTotalNumOutputChannels();
+    
+    filter.prepare (spec);
+    
+    reset();
 }
 
 void EP491_DelayAudioProcessor::releaseResources()
@@ -166,6 +175,10 @@ void EP491_DelayAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, 
     juce::ScopedNoDenormals noDenormals;
     auto totalNumInputChannels  = getTotalNumInputChannels();
     auto totalNumOutputChannels = getTotalNumOutputChannels();
+    
+//    auto& filterTypeProcess = *apvts.getRawParameterValue("FILTERTYPE");
+//    auto& cutoff = *apvts.getRawParameterValue("FILTERFREQ");
+//    auto& res = *apvts.getRawParameterValue("FILTERRES");
 
     for (auto i = totalNumInputChannels; i < totalNumOutputChannels; ++i)
         buffer.clear (i, 0, buffer.getNumSamples());
@@ -178,6 +191,15 @@ void EP491_DelayAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, 
     }
     
     updateBufferPositions (buffer, delayBuffer);
+    
+//    setType (filterTypeProcess);
+//    filter.setCutoffFrequency (cutoff);
+//    filter.setResonance (res);
+//
+//    auto audioBlock = juce::dsp::AudioBlock<float> (buffer);
+//    auto context = juce::dsp::ProcessContextReplacing<float> (audioBlock);
+//
+//    filter.process (context);
 }
 
 void EP491_DelayAudioProcessor::fillBuffer (juce::AudioBuffer<float>& buffer, int channel)
@@ -261,7 +283,7 @@ void EP491_DelayAudioProcessor::readFromBuffer (juce::AudioBuffer<float>& buffer
     auto delayTimeLeft = apvts.getRawParameterValue ("DELAYMSLEFT")->load();
     auto delayTimeRight = apvts.getRawParameterValue ("DELAYMSRIGHT")->load();
     
-    if (apvts.getRawParameterValue ("DELAYLINK")->load() == true)
+    if (apvts.getRawParameterValue ("DELAYLINK")->load() == 0)
     {
         delayTimeRight = delayTimeLeft;
     }
@@ -340,6 +362,34 @@ float EP491_DelayAudioProcessor::lin_interp(float sample_x, float sample_x1, flo
     return (1 - inPhase) * sample_x + inPhase * sample_x1;
 }
 
+void EP491_DelayAudioProcessor::reset()
+{
+    filter.reset();
+}
+
+void EP491_DelayAudioProcessor::setType(int choice)
+{
+    using fType = juce::dsp::StateVariableTPTFilterType;
+    
+    switch (choice)
+    {
+        case 0:
+            filter.setType (fType::lowpass);
+            break;
+            
+        case 1:
+            filter.setType (fType::bandpass);
+            break;
+            
+        case 2:
+            filter.setType (fType::highpass);
+            break;
+            
+        default:
+            break;
+    }
+}
+
 juce::AudioProcessorValueTreeState::ParameterLayout EP491_DelayAudioProcessor::createParams()
 {
     std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
@@ -347,11 +397,19 @@ juce::AudioProcessorValueTreeState::ParameterLayout EP491_DelayAudioProcessor::c
     params.push_back (std::make_unique<juce::AudioParameterFloat>("DELAYMSLEFT", "Delay Ms Left", 0.0f, 2000.0f, 500.0f));
     params.push_back (std::make_unique<juce::AudioParameterFloat>("DELAYMSRIGHT", "Delay Ms Right", 0.0f, 2000.0f, 350.0f));
     
-    params.push_back (std::make_unique<juce::AudioParameterBool>("DELAYLINK", "Delay Link", false));
+//    params.push_back (std::make_unique<juce::AudioParameterBool>("DELAYLINK", "Delay Link", false));
     
-    params.push_back (std::make_unique<juce::AudioParameterFloat>("FEEDBACK", "Feedback", 0.0f, 0.9f, 0.8f));
+    params.push_back (std::make_unique<juce::AudioParameterChoice>("DELAYLINK", "Delay Link", juce::StringArray { "Linked", "Unlinked" }, 0));
+    
+    params.push_back (std::make_unique<juce::AudioParameterFloat>("FEEDBACK", "Feedback", 0.0f, 0.9f, 0.5f));
     
     params.push_back (std::make_unique<juce::AudioParameterFloat>("DRYWET", "Dry/Wet", 0.0f, 100.0f, 60.0f));
+    
+//    params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID { "FILTERTYPE", 1 }, "Filter Type", juce::StringArray { "Lowpass", "Bandpass", "Highpass" }, 0));
+//
+//    params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "FILTERFREQ", 1}, "Filter Freq", juce::NormalisableRange<float> { 20.0f, 20000.0f, 0.1f, 0.6f }, 20000.0f));
+//
+//    params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "FILTERRES", 1}, "Filter Resonance", juce::NormalisableRange<float> { 1.0f, 10.0f, 0.01f}, 1.0f));
     
     return { params.begin(), params.end() };
 }

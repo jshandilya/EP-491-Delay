@@ -75,22 +75,39 @@ private:
     juce::LinearSmoothedValue<float> feedback[2] { 0.0f };
     int writePosition { 0 };
     
-    float mDelayTimeSmoothed;
     
-    float mDryWet;
+    // Filter
     
-    float mFeedbackLeft;
-    float mFeedbackRight;
+    enum class FilterType
+    {
+        LowPass,
+        BandPass,
+        HighPass
+    };
     
-    float mDelayTimeInSamples;
-    float mDelayReadHead;
+    void reset() override;
+    void setType(int choice);
     
-    int mCircularBufferLength;
+    juce::dsp::StateVariableTPTFilter<float> filter;
+    FilterType filterType { FilterType::LowPass };
     
-    int mCircularBufferWriteHead;
     
-    float* mCircularBufferLeft;
-    float* mCircularBufferRight;
+//    float mDelayTimeSmoothed;
+//
+//    float mDryWet;
+//
+//    float mFeedbackLeft;
+//    float mFeedbackRight;
+//
+//    float mDelayTimeInSamples;
+//    float mDelayReadHead;
+//
+//    int mCircularBufferLength;
+//
+//    int mCircularBufferWriteHead;
+//
+//    float* mCircularBufferLeft;
+//    float* mCircularBufferRight;
     //==============================================================================
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (EP491_DelayAudioProcessor)
 };
