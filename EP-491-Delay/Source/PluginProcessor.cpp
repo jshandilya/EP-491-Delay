@@ -209,7 +209,7 @@ void EP491_DelayAudioProcessor::fillBuffer (juce::AudioBuffer<float>& buffer, in
     auto* wet = apvts.getRawParameterValue ("DRYWET");
     
     buffer.applyGain (0, bufferSize, 1.0f - (wet->load() / 100.0f));
-    
+        
     // Check to see if main buffer copies to delay buffer without needing to wrap...
     if (delayBufferSize >= bufferSize + writePosition)
     {
