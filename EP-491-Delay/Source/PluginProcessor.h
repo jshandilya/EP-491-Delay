@@ -63,51 +63,26 @@ public:
     juce::AudioProcessorValueTreeState apvts;
 
 private:
-    void fillBuffer (juce::AudioBuffer<float>& buffer, int channel);
-    void feedbackBuffer (juce::AudioBuffer<float>& buffer, int channel);
-    void readFromBuffer (juce::AudioBuffer<float>& buffer, juce::AudioBuffer<float>& delayBuffer, int channel);
-    void updateBufferPositions (juce::AudioBuffer<float>& buffer, juce::AudioBuffer<float>& delayBuffer);
+    
+    float mDelayTimeSmoothed;
+    
+    float mDryWet;
+    
+    float mFeedbackLeft;
+    float mFeedbackRight;
+    
+    float mDelayTimeInSamples;
+    float mDelayReadHead;
+    
+    int mCircularBufferLength;
+    
+    int mCircularBufferWriteHead;
+    
+    float* mCircularBufferLeft;
+    float* mCircularBufferRight;
     
     juce::AudioProcessorValueTreeState::ParameterLayout createParams();
     
-    juce::AudioBuffer<float> delayBuffer;
-    juce::LinearSmoothedValue<float> delayInMillis[2] { 0.0f };
-    juce::LinearSmoothedValue<float> feedback[2] { 0.0f };
-    int writePosition { 0 };
-    
-    
-    // Filter
-    
-    enum class FilterType
-    {
-        LowPass,
-        BandPass,
-        HighPass
-    };
-    
-    void reset() override;
-    void setType(int choice);
-    
-    juce::dsp::StateVariableTPTFilter<float> filter;
-    FilterType filterType { FilterType::LowPass };
-    
-    
-//    float mDelayTimeSmoothed;
-//
-//    float mDryWet;
-//
-//    float mFeedbackLeft;
-//    float mFeedbackRight;
-//
-//    float mDelayTimeInSamples;
-//    float mDelayReadHead;
-//
-//    int mCircularBufferLength;
-//
-//    int mCircularBufferWriteHead;
-//
-//    float* mCircularBufferLeft;
-//    float* mCircularBufferRight;
     //==============================================================================
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (EP491_DelayAudioProcessor)
 };
