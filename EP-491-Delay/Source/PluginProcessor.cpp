@@ -32,6 +32,8 @@ EP491_DelayAudioProcessor::EP491_DelayAudioProcessor()
     mFeedbackLeft = 0.f;
     mFeedbackRight = 0.f;
     mDryWet = 0.5f;
+    
+    reverb.reset();
 }
 
 EP491_DelayAudioProcessor::~EP491_DelayAudioProcessor()
@@ -45,6 +47,8 @@ EP491_DelayAudioProcessor::~EP491_DelayAudioProcessor()
         delete [] mCircularBufferRight;
         mCircularBufferRight = nullptr;
     }
+    
+    reverb.reset();
 }
 
 //==============================================================================
@@ -112,6 +116,8 @@ void EP491_DelayAudioProcessor::changeProgramName (int index, const juce::String
 //==============================================================================
 void EP491_DelayAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
+    reverb.reset();
+    
     auto& delayTime = *apvts.getRawParameterValue("TIME");
     
     mDelayTimeInSamples = sampleRate * delayTime;
@@ -143,6 +149,20 @@ void EP491_DelayAudioProcessor::prepareToPlay (double sampleRate, int samplesPer
     mCircularBufferWriteHead = 0;
 
     mDelayTimeSmoothed = delayTime;
+    
+    juce::dsp::ProcessSpec spec;
+    spec.maximumBlockSize = samplesPerBlock;
+    spec.sampleRate = sampleRate;
+    spec.numChannels = getTotalNumOutputChannels();
+    
+    reverbParams.roomSize = 0.5f;
+    reverbParams.width = 1.0f;
+    reverbParams.damping = 0.5f;
+    reverbParams.freezeMode = 0.0f;
+    reverbParams.dryLevel = 1.0f;
+    reverbParams.wetLevel = 0.0f;
+    
+    reverb.setParameters (reverbParams);
 }
 
 void EP491_DelayAudioProcessor::releaseResources()
@@ -190,8 +210,14 @@ void EP491_DelayAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, 
     auto& delayFeedback = *apvts.getRawParameterValue("FEEDBACK");
     auto& delayDryWet = *apvts.getRawParameterValue("DRYWET");
     
+    reverbParams.roomSize = *apvts.getRawParameterValue ("REVERBSIZE");
+    reverbParams.width = *apvts.getRawParameterValue ("REVERBWIDTH");
+    reverbParams.damping = *apvts.getRawParameterValue ("REVERBDAMPING");
+    reverbParams.dryLevel = *apvts.getRawParameterValue ("REVERBDRY");
+    reverbParams.wetLevel = *apvts.getRawParameterValue ("REVERBWET");
+    reverbParams.freezeMode = *apvts.getRawParameterValue ("REVERBFREEZE");
+    
     mDelayTimeInSamples = getSampleRate() * delayTime;
-
     
     float* leftChannel = buffer.getWritePointer(0);
     float* rightChannel = buffer.getWritePointer(1);
@@ -234,6 +260,10 @@ void EP491_DelayAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, 
             mCircularBufferWriteHead = 0;
         }
     }
+    
+    reverb.setParameters (reverbParams);
+    juce::dsp::AudioBlock<float> block { buffer };
+    reverb.process (juce::dsp::ProcessContextReplacing<float> (block));
 }
 
 //==============================================================================
@@ -281,10 +311,15 @@ juce::AudioProcessorValueTreeState::ParameterLayout EP491_DelayAudioProcessor::c
     std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
     
     params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "TIME", 1 }, "Time", 0.01f, MAX_DELAY_TIME, 0.5f));
-    
     params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "FEEDBACK", 1 }, "Feedback", 0.0f, 0.98f, 0.5f));
-    
     params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "DRYWET", 1 }, "Dry Wet", 0.0f, 1.0f, 0.5f));
+    
+    params.push_back (std::make_unique<juce::AudioParameterFloat>("REVERBSIZE", "Reverb Size", juce::NormalisableRange<float> { 0.0f, 1.0f, 0.01f }, 0.0f, ""));
+    params.push_back (std::make_unique<juce::AudioParameterFloat>("REVERBWIDTH", "Reverb Width", juce::NormalisableRange<float> { 0.0f, 1.0f, 0.01f }, 1.0f, ""));
+    params.push_back (std::make_unique<juce::AudioParameterFloat>("REVERBDAMPING", "Reverb Damping", juce::NormalisableRange<float> { 0.0f, 1.0f, 0.01f }, 0.5f, ""));
+    params.push_back (std::make_unique<juce::AudioParameterFloat>("REVERBDRY", "Reverb Dry", juce::NormalisableRange<float> { 0.0f, 1.0f, 0.01f }, 1.0f, ""));
+    params.push_back (std::make_unique<juce::AudioParameterFloat>("REVERBWET", "Reverb Wet", juce::NormalisableRange<float> { 0.0f, 1.0f, 0.01f }, 0.0f, ""));
+    params.push_back (std::make_unique<juce::AudioParameterFloat>("REVERBFREEZE", "Reverb Freeze", juce::NormalisableRange<float> { 0.0f, 1.0f, 1.0f }, 0.0f, ""));
     
     return { params.begin(), params.end() };
 }

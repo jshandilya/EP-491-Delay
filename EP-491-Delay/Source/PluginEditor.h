@@ -35,8 +35,18 @@ private:
     juce::Slider feedbackSlider, dwSlider;
     std::unique_ptr<SliderAttachment> feedbackAttachment, dwAttachment;
     juce::Label feedbackLabel { "Feedback", "Feedback" }, dwLabel { "Dry/Wet", "Dry/Wet" };
+    
+    juce::Slider reverbSizeSlider, reverbWidthSlider, reverbDampSlider;
+    std::unique_ptr<SliderAttachment> reverbSizeAttachment, reverbWidthAttachment, reverbDampAttachment;
+    juce::Label reverbSizeLabel { "Reverb Size", "Reverb Size" }, reverbWidthLabel { "Reverb Width", "Reverb Width" }, reverbDampLabel { "Reverb Damping", "Reverb Damping" };
+    
+    juce::Slider reverbDrySlider, reverbWetSlider, reverbFreezeSlider;
+    std::unique_ptr<SliderAttachment> reverbDryAttachment, reverbWetAttachment, reverbFreezeAttachment;
+    juce::Label reverbDryLabel { "Reverb Dry", "Reverb Dry" }, reverbWetLabel { "Reverb Wet", "Reverb Wet" }, reverbFreezeLabel { "Reverb Freeze", "Reverb Freeze" };
         
     void setSliderWithLabel (juce::Slider& slider, juce::Label& label, juce::AudioProcessorValueTreeState& apvts, juce::String paramID, std::unique_ptr<SliderAttachment>& attachment);
+    
+    void setReverbSliderWithLabel (juce::Slider& slider, juce::Label& label, juce::AudioProcessorValueTreeState& apvts, juce::String paramID, std::unique_ptr<SliderAttachment>& attachment);
     
     EP491_DelayAudioProcessor& audioProcessor;
 

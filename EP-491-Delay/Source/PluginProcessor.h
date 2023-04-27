@@ -83,6 +83,11 @@ private:
     
     juce::AudioProcessorValueTreeState::ParameterLayout createParams();
     
+    juce::dsp::Reverb reverb;
+    juce::dsp::Reverb::Parameters reverbParams;
+    
+    void setReverbParams();
+    
     //==============================================================================
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (EP491_DelayAudioProcessor)
 };
