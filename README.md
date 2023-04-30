@@ -12,7 +12,3 @@ Download the [JUCE framework](https://juce.com/get-juce/) before
 cloning this repo. Open "EP-491-Delay.jucer" and open the source files in your preferred exporter. 
 
 In your IDE, select the plugin format you wish to use, and run the program. The plugin will then be available in the plugins section of your DAW.
-
-## Sources
-
-This project is inspired by [The Audio Programmer's delay series](https://www.youtube.com/watch?v=eA5Mhbric6Y).
