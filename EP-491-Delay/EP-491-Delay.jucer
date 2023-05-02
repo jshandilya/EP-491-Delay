@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<JUCERPROJECT id="e4HFxx" name="EP-491-Delay" projectType="audioplug" useAppConfig="0"
-              addUsingNamespaceToJuceHeader="0" displaySplashScreen="1" jucerFormatVersion="1">
-  <MAINGROUP id="brGvf3" name="EP-491-Delay">
+<JUCERPROJECT id="e4HFxx" name="Nyx Delay" projectType="audioplug" useAppConfig="0"
+              addUsingNamespaceToJuceHeader="0" displaySplashScreen="1" jucerFormatVersion="1"
+              pluginManufacturer="JS Audio">
+  <MAINGROUP id="brGvf3" name="Nyx Delay">
     <GROUP id="{1E2E5417-3366-11D5-EAFD-C355A54133C1}" name="Source">
       <FILE id="aMPjxW" name="PluginProcessor.cpp" compile="1" resource="0"
             file="Source/PluginProcessor.cpp"/>
