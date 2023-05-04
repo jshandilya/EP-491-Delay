@@ -1,5 +1,7 @@
 # EP-491-Delay
 
+![](Images/Nyx.png)
+
 ## Project Description 
 
 Delay audio effect plugin in VST3 and AU format, written in C++ and the JUCE framework. 
