@@ -8,6 +8,10 @@ Delay audio effect plugin in VST3 and AU format, written in C++ and the JUCE fra
 
 Project for Advanced Projects in Electronic Production and Design (EP-491) at Berklee College of Music.
 
+## Demo
+
+[SoundCloud Link](https://soundcloud.com/user-67320085-103319864/nyx/s-W4GLmHxoer8?si=f1aecf1660e34d909b5a3bfcb92fafb6&utm_source=clipboard&utm_medium=text&utm_campaign=social_sharing)
+
 ## Building
 
 Download the [JUCE framework](https://juce.com/get-juce/) before
